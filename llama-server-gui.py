@@ -3,7 +3,7 @@
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
-import subprocess, os, glob
+import subprocess, os, glob, time
 
 PID_FILE = "/tmp/llama-server.pid"
 LOG_FILE = "/opt/llamacpp-launcher/llama-server.log"
@@ -47,6 +47,8 @@ class LlamaServerWindow(Gtk.Window):
         self.set_default_size(520, 340)
         self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
         self.running = is_running()
+        self.was_active = False
+        self.last_free_time = 0
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         vbox.set_margin_top(20); vbox.set_margin_bottom(20)
@@ -78,9 +80,9 @@ class LlamaServerWindow(Gtk.Window):
         self.log_label = Gtk.Label(); self.log_label.set_markup("<span size='small' color='#555555'><b>Sortie verbeuse :</b> En attente...</span>")
         self.log_label.set_halign(Gtk.Align.START); vbox.pack_start(self.log_label, False, False, 0)
 
-        # Indicateur d'activité (dot + texte, style GNOME)
+        # Indicateur d'activité (séparé du statut serveur)
         self.activity_label = Gtk.Label()
-        self.activity_label.set_markup("<span size='small' color='#777777'><b>●</b> <b>Activité :</b> En attente...</span>")
+        self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche :</b> Inactive</span>")
         self.activity_label.set_halign(Gtk.Align.START); vbox.pack_start(self.activity_label, False, False, 0)
         GLib.timeout_add_seconds(2, self._refresh_activity_timer)
 
@@ -148,7 +150,10 @@ class LlamaServerWindow(Gtk.Window):
     def on_refresh_models(self, button):
         self._load_models()
 
-    def _status_markup(self): return "<span color='green'><b>● En cours d'exécution</b></span>" if self.running else "<span color='red'><b>○ Arrêté</b></span>"
+    def _status_markup(self):
+        if self.running:
+            return "<span color='#26a269'><b>● Serveur : Démarré</b></span>"
+        return "<span color='#cc3333'><b>○ Serveur : Arrêté</b></span>"
 
     def _update_buttons(self):
         self.btn_start.set_sensitive(not self.running)
@@ -270,26 +275,29 @@ class LlamaServerWindow(Gtk.Window):
 
     def _refresh_activity_timer(self):
         try:
+            active = False
             if os.path.exists(LOG_FILE):
                 with open(LOG_FILE, "r") as f:
                     lines = f.read().splitlines()
                 recent = lines[-10:] if len(lines) >= 10 else lines
-                # Détecter si une tâche est en cours : "processing task" après dernier "stop processing"
                 last_stop = -1
                 for i, l in enumerate(recent):
                     if "stop processing" in l or "release:" in l:
                         last_stop = i
-                active = False
                 for i, l in enumerate(recent):
                     if i > last_stop and ("processing task" in l or "launch_slot_" in l or "slot get_available" in l):
                         active = True
                         break
-                if active:
-                    self.activity_label.set_markup("<span size='small' color='#e5a23a'><b>●</b> <b>Activité :</b> Traitement en cours...</span>")
-                else:
-                    self.activity_label.set_markup("<span size='small' color='#26a269'><b>●</b> <b>Activité :</b> En attente</span>")
+
+            if active:
+                self.activity_label.set_markup("<span size='small' color='#e5a23a'><b>●</b> <b>Activité :</b> Traitement en cours...</span>")
+                self.was_active = True
+            elif self.running:
+                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche</b> : Inactive</span>")
+                self.was_active = False
             else:
-                self.activity_label.set_markup("<span size='small' color='#777777'><b>●</b> <b>Activité :</b> Arrêté</span>")
+                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche</b> : Inactive</span>")
+                self.was_active = False
         except Exception:
             pass
         return True
