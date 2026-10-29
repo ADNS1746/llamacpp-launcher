@@ -78,6 +78,12 @@ class LlamaServerWindow(Gtk.Window):
         self.log_label = Gtk.Label(); self.log_label.set_markup("<span size='small' color='#555555'><b>Sortie verbeuse :</b> En attente...</span>")
         self.log_label.set_halign(Gtk.Align.START); vbox.pack_start(self.log_label, False, False, 0)
 
+        # Indicateur d'activité (dot + texte, style GNOME)
+        self.activity_label = Gtk.Label()
+        self.activity_label.set_markup("<span size='small' color='#777777'><b>●</b> <b>Activité :</b> En attente...</span>")
+        self.activity_label.set_halign(Gtk.Align.START); vbox.pack_start(self.activity_label, False, False, 0)
+        GLib.timeout_add_seconds(2, self._refresh_activity_timer)
+
         # --- Métriques GPU ---
         self.gpu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.gpu_box.set_halign(Gtk.Align.CENTER)
@@ -261,6 +267,32 @@ class LlamaServerWindow(Gtk.Window):
 
     def _refresh_log_timer(self):
         self._update_log_indicator(); return True
+
+    def _refresh_activity_timer(self):
+        try:
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, "r") as f:
+                    lines = f.read().splitlines()
+                recent = lines[-10:] if len(lines) >= 10 else lines
+                # Détecter si une tâche est en cours : "processing task" après dernier "stop processing"
+                last_stop = -1
+                for i, l in enumerate(recent):
+                    if "stop processing" in l or "release:" in l:
+                        last_stop = i
+                active = False
+                for i, l in enumerate(recent):
+                    if i > last_stop and ("processing task" in l or "launch_slot_" in l or "slot get_available" in l):
+                        active = True
+                        break
+                if active:
+                    self.activity_label.set_markup("<span size='small' color='#e5a23a'><b>●</b> <b>Activité :</b> Traitement en cours...</span>")
+                else:
+                    self.activity_label.set_markup("<span size='small' color='#26a269'><b>●</b> <b>Activité :</b> En attente</span>")
+            else:
+                self.activity_label.set_markup("<span size='small' color='#777777'><b>●</b> <b>Activité :</b> Arrêté</span>")
+        except Exception:
+            pass
+        return True
 
     def _refresh_gpu_timer(self):
         self._update_gpu_indicator(); return True
