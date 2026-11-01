@@ -8,7 +8,7 @@ import subprocess, os, glob, time
 PID_FILE = "/tmp/llama-server.pid"
 LOG_FILE = "/opt/llamacpp-launcher/llama-server.log"
 WRAPPER = "/opt/llamacpp-launcher/llama-server-wrapper.sh"
-MODELS_DIR = "/opt/textgen/user_data/models"
+MODELS_DIR = "/opt/llamacpp-launcher/models"
 CONFIG_FILE = "/opt/llamacpp-launcher/current_model.txt"
 
 

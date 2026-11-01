@@ -27,7 +27,7 @@ get_model() {
             return
         fi
     fi
-    echo "${DEFAULT_MODEL:-/opt/textgen/user_data/models/Unsloth_Qwen3-14B-128K-Q4_K_M.gguf}"
+    echo "${DEFAULT_MODEL:-/opt/llamacpp-launcher/models/Unsloth_Qwen3-14B-128K-Q4_K_M.gguf}"
 }
 
 build_cmd() {
