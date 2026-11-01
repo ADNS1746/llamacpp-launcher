@@ -43,10 +43,11 @@ build_cmd() {
     local parallel=${PARALLEL:-1}
     local host=${HOST:-192.168.2.54}
     local port=${PORT:-8081}
-    echo "${BIN:-/opt/llamacpp/bin/llama-server} -m '$m' --ctx-size $ctx_size --n-gpu-layers $n_gpu_layers --threads $threads --threads-batch $threads_batch --flash-attn $flash_attn --batch-size $batch_size --ubatch-size $ubatch_size --parallel $parallel --host $host --port $port"
+    # Clé API supprimée — pas d'authentification
+    echo "${BIN:-/usr/bin/llama-server} -m '$m' --ctx-size $ctx_size --n-gpu-layers $n_gpu_layers --threads $threads --threads-batch $threads_batch --flash-attn $flash_attn --batch-size $batch_size --ubatch-size $ubatch_size --parallel $parallel --host $host --port $port"
 }
 
-export LD_LIBRARY_PATH="${LD_LIB:-/opt/llamacpp/bin}"
+export LD_LIBRARY_PATH="${LD_LIB:-/usr/bin}"
 LOG_FILE="${LOG_FILE:-/opt/llamacpp-launcher/llama-server.log}"
 MODEL_CONFIG_FILE="${CONFIG_FILE:-/opt/llamacpp-launcher/current_model.txt}"
 PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
@@ -93,7 +94,8 @@ launch_server() {
     if [ "$TARGET_USER" = "$USER" ]; then
         nohup bash -c "echo \$\$ > '$PID_FILE'; exec $cmd" </dev/null >>"$LOG_FILE" 2>&1 &
     else
-        nohup runuser -u "$TARGET_USER" -- bash -c "echo \$\$ > '$PID_FILE'; exec $cmd" </dev/null >>"$LOG_FILE" 2>&1 &
+        # Essayer sudo -u (fonctionne même si l'appelant n'est pas root, via sudoers)
+        nohup sudo -u llama.cpp bash -c "echo \$\$ > '$PID_FILE'; exec $cmd" </dev/null >>"$LOG_FILE" 2>&1 &
     fi
     child_pid=$!
     disown 2>/dev/null || true
@@ -160,7 +162,8 @@ case "${1:-}" in
         if [ "$TARGET_USER" = "$USER" ]; then
             bash -c "echo \$\$ > '$PID_FILE'; exec $(build_cmd "$model_path")" >>"$LOG_FILE" 2>&1 &
         else
-            runuser -u "$TARGET_USER" -- bash -c "echo \$\$ > '$PID_FILE'; exec $(build_cmd "$model_path")" >>"$LOG_FILE" 2>&1 &
+            # Utiliser sudo pour lancer en tant que llama.cpp (nécessite sudoers configuré)
+            sudo -u llama.cpp bash -c "echo \$\$ > '$PID_FILE'; exec $(build_cmd "$model_path")" >>"$LOG_FILE" 2>&1 &
         fi
         child_pid=$!
         echo "$child_pid" > "$PID_FILE"
