@@ -9,7 +9,9 @@ APP_DIR="/opt/llamacpp-launcher"
 MODELS_DIR="$APP_DIR/models"
 ICON_SOURCE="$SOURCE_DIR/icon.svg"
 ICON="$APP_DIR/icon.svg"
-DESKTOP_FILE="$HOME/.local/share/applications/llama-server.desktop"
+REAL_HOME="$HOME"
+[ -n "$SUDO_USER" ] && REAL_HOME="/home/$SUDO_USER"
+DESKTOP_FILE="$REAL_HOME/.local/share/applications/llama-server.desktop"
 WRAPPER="$SOURCE_DIR/llama-server-wrapper.sh"
 GUI="$SOURCE_DIR/llama-server-gui.py"
 CONFIG="$SOURCE_DIR/config.conf"
@@ -17,16 +19,18 @@ CONFIG="$SOURCE_DIR/config.conf"
 echo "=== Llama.cpp launcher installation ==="
 
 # 1. Create directories
+mkdir -p "$MODELS_DIR" 2>/dev/null || sudo mkdir -p "$MODELS_DIR"
 echo "[1/7] Creating directories..."
-sudo mkdir -p "$APP_DIR" "$MODELS_DIR" "$HOME/.local/share/applications"
+sudo mkdir -p "$APP_DIR" 2>/dev/null || mkdir -p "$APP_DIR"
+mkdir -p "$(dirname "$DESKTOP_FILE")" 2>/dev/null || sudo mkdir -p "$(dirname "$DESKTOP_FILE")"
 
 # 2. Check dependencies + auto-detect llama-server binary
 echo "[2/7] Checking dependencies..."
 LLAMA_BIN=""
-for p in $(echo "$PATH" | tr ':' ' '); do
+for p in $(echo "/usr/local/sbin:/usr/local/bin:/usr/bin:$PATH" | tr ':' ' '); do
     [ -x "$p/llama-server" ] && LLAMA_BIN="$p/llama-server" && break
     done
-    [ -z "$LLAMA_BIN" ] && for p in /usr/local/bin /usr/bin /bin /snap/bin; do [ -x "$p/llama-server" ] && LLAMA_BIN="$p/llama-server" && break; done
+    [ -z "$LLAMA_BIN" ] && for p in /usr/local/sbin /usr/local/bin /usr/bin /bin /snap/bin; do [ -x "$p/llama-server" ] && LLAMA_BIN="$p/llama-server" && break; done
 if [ -z "$LLAMA_BIN" ]; then echo -e "${RED}WARNING: llama-server binary not found${NC}"; else echo "Binary detected: $LLAMA_BIN"; fi
 
 if ! command -v python3 &>/dev/null; then echo -e "${RED}ERROR: python3 required${NC}"; exit 1; fi
@@ -67,8 +71,15 @@ Terminal=false
 Type=Application
 Categories=Utility;Development;
 StartupNotify=true
+TryExec=$APP_DIR/llama-server-gui.py
+StartupWMClass=llama-server-gui
 EOF
 chmod +x "$DESKTOP_FILE"
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_UID="$(id -u "$REAL_USER" 2>/dev/null || echo 1000)"
+REAL_GID="$(id -g "$REAL_USER" 2>/dev/null || echo 1000)"
+chown "$REAL_UID:$REAL_GID" "$DESKTOP_FILE" 2>/dev/null || true
+update-desktop-database "$REAL_HOME/.local/share/applications" 2>/dev/null || true
 echo "Desktop launcher created: $DESKTOP_FILE"
 
 # 5. Skip

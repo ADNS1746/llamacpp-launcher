@@ -426,6 +426,10 @@ class LlamaServerWindow(Gtk.Window):
 
 
 def main():
+    ok, args = Gtk.init_check()
+    if not ok:
+        print("Error: GTK could not initialize. Ensure you run from a desktop session (DISPLAY set).")
+        import sys; sys.exit(1)
     app = LlamaServerWindow(); app.show_all(); Gtk.main()
 
 

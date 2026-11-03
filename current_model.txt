@@ -1,1 +1,1 @@
-/opt/llamacpp-launcher/models/unsloth_Qwen3.5-9B-Q4_K_M.gguf
+/opt/llamacpp-launcher/models/Unsloth_Qwen3-14B-128K-Q4_K_M.gguf
