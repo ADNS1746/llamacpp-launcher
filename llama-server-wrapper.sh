@@ -43,7 +43,7 @@ build_cmd() {
     local parallel=${PARALLEL:-1}
     local host=${HOST:-192.168.2.54}
     local port=${PORT:-8081}
-    # Clé API supprimée — pas d'authentification
+    # API key removed - no authentication
     echo "${BIN:-/usr/bin/llama-server} -m '$m' --ctx-size $ctx_size --n-gpu-layers $n_gpu_layers --threads $threads --threads-batch $threads_batch --flash-attn $flash_attn --batch-size $batch_size --ubatch-size $ubatch_size --parallel $parallel --host $host --port $port"
 }
 
@@ -77,7 +77,7 @@ is_running() {
 
 launch_server() {
     if is_running; then
-        notify "Llama.cpp" "Le serveur est déjà en cours d'exécution (PID $(cat "$PID_FILE"))"
+        notify "Llama.cpp" "Server already running (PID $(cat "$PID_FILE"))"
         return 1
     fi
 
@@ -102,14 +102,14 @@ launch_server() {
     disown 2>/dev/null || true
 
     echo "$child_pid" > "$PID_FILE"
-    notify "Llama.cpp" "Serveur démarré (PID $child_pid) sur http://${HOST:-192.168.2.54}:${PORT:-8081}"
-    >&2 echo "Serveur démarré (PID $child_pid) avec modèle : $model"
+    notify "Llama.cpp" "Server started (PID $child_pid) sur http://${HOST:-192.168.2.54}:${PORT:-8081}"
+    >&2 echo "Server started (PID $child_pid) avec modèle : $model"
     return 0
 }
 
 stop_server() {
     if ! is_running; then
-        notify "Llama.cpp" "Le serveur n'est pas en cours d'exécution"
+        notify "Llama.cpp" "Server is not running"
         return 1
     fi
     local pid; pid=$(cat "$PID_FILE")
@@ -120,8 +120,8 @@ stop_server() {
     done
     if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
     rm -f "$PID_FILE"
-    >&2 echo "Serveur arrêté"
-    notify "Llama.cpp" "Serveur arrêté"
+    >&2 echo "Server stopped"
+    notify "Llama.cpp" "Server stopped"
     return 0
 }
 
@@ -146,15 +146,15 @@ case "${1:-}" in
         ;;
     stop) stop_server ;;
     status)
-        if is_running; then echo "Serveur en cours d'exécution (PID $(cat "$PID_FILE"))"; echo "Modèle : $(cat "$MODEL_CONFIG_FILE" 2>/dev/null || echo 'inconnu')"; else echo "Serveur arrêté"; fi
+        if is_running; then echo "Server running (PID $(cat "$PID_FILE"))"; echo "Model : $(cat "$MODEL_CONFIG_FILE" 2>/dev/null || echo 'inconnu')"; else echo "Server stopped"; fi
         ;;
     restart)
         stop_server; sleep 1; launch_server ;;
     *)
         # Foreground mode (terminal session): server stops when terminal closes
         if is_running; then
-            notify "Llama.cpp" "Le serveur est déjà en cours d'exécution (PID $(cat "$PID_FILE"))"
-            >&2 echo "Serveur déjà en cours d'exécution (PID $(cat "$PID_FILE"))"
+            notify "Llama.cpp" "Server already running (PID $(cat "$PID_FILE"))"
+            >&2 echo "Server already running (PID $(cat "$PID_FILE"))"
             exit 0
         fi
         : > "$LOG_FILE"
@@ -167,12 +167,12 @@ case "${1:-}" in
         fi
         child_pid=$!
         echo "$child_pid" > "$PID_FILE"
-        notify "Llama.cpp" "Serveur démarré (PID $child_pid)"
-        >&2 echo "Serveur démarré (PID $child_pid) sur http://${HOST:-192.168.2.54}:${PORT:-8081}"
+        notify "Llama.cpp" "Server started (PID $child_pid)"
+        >&2 echo "Server started (PID $child_pid) sur http://${HOST:-192.168.2.54}:${PORT:-8081}"
         wait "$child_pid" 2>/dev/null
         exit_code=$?
         rm -f "$PID_FILE"
-        if [ "$exit_code" -ne 0 ] 2>/dev/null; then notify "Erreur Llama.cpp" "Le serveur s'est arrêté avec le code $exit_code"; fi
+        if [ "$exit_code" -ne 0 ] 2>/dev/null; then notify "Erreur Llama.cpp" "Server stopped with code $exit_code"; fi
         exit $exit_code
         ;;
 esac

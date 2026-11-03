@@ -8,8 +8,20 @@ import subprocess, os, glob, time
 PID_FILE = "/tmp/llama-server.pid"
 LOG_FILE = "/opt/llamacpp-launcher/llama-server.log"
 WRAPPER = "/opt/llamacpp-launcher/llama-server-wrapper.sh"
-MODELS_DIR = "/opt/llamacpp-launcher/models"
 CONFIG_FILE = "/opt/llamacpp-launcher/current_model.txt"
+CONFIG_CONF = "/opt/llamacpp-launcher/config.conf"
+
+def get_model_dir():
+    try:
+        with open(CONFIG_CONF, "r") as f:
+            for line in f:
+                if line.startswith("MODEL_DIR="):
+                    return line.split("=", 1)[1].strip().strip('"')
+    except Exception:
+        pass
+    return "/opt/llamacpp-launcher/models"
+
+MODELS_DIR = get_model_dir()
 
 
 def is_running():
@@ -55,20 +67,20 @@ class LlamaServerWindow(Gtk.Window):
         vbox.set_margin_start(20); vbox.set_margin_end(20)
 
         # Titre
-        title = Gtk.Label(); title.set_markup("<span weight='bold' size='large'>Llama.cpp Server</span>")
+        title = Gtk.Label(); title.set_markup("<span weight='bold' size='large'>LL launcher</span>")
         title.set_halign(Gtk.Align.START); vbox.pack_start(title, False, False, 0)
 
-        # --- Sélecteur de modèle ---
+        # --- Model selector ---
         model_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        model_label = Gtk.Label(label="Modèle :"); model_label.set_halign(Gtk.Align.START)
+        model_label = Gtk.Label(label="Model :"); model_label.set_halign(Gtk.Align.START)
         model_box.pack_start(model_label, False, False, 0)
         self.model_combo = Gtk.ComboBoxText(); self.model_combo.set_hexpand(True)
         self._load_models(); model_box.pack_start(self.model_combo, True, True, 0)
-        btn_refresh = Gtk.Button(label="Actualiser"); btn_refresh.connect("clicked", self.on_refresh_models)
+        btn_refresh = Gtk.Button(label="Refresh"); btn_refresh.connect("clicked", self.on_refresh_models)
         model_box.pack_start(btn_refresh, False, False, 0)
-        btn_apply = Gtk.Button(label="Appliquer"); btn_apply.connect("clicked", self.on_apply_models)
+        btn_apply = Gtk.Button(label="Apply"); btn_apply.connect("clicked", self.on_apply_models)
         model_box.pack_start(btn_apply, False, False, 0)
-        btn_params = Gtk.Button(label="Paramètres"); btn_params.connect("clicked", self.open_config_editor)
+        btn_params = Gtk.Button(label="Settings"); btn_params.connect("clicked", self.open_config_editor)
         model_box.pack_start(btn_params, False, False, 0)
         vbox.pack_start(model_box, False, False, 0)
 
@@ -77,16 +89,16 @@ class LlamaServerWindow(Gtk.Window):
         self.status_label.set_halign(Gtk.Align.START); vbox.pack_start(self.status_label, False, False, 0)
 
         # Indicateur de sortie verbeuse
-        self.log_label = Gtk.Label(); self.log_label.set_markup("<span size='small' color='#555555'><b>Sortie verbeuse :</b> En attente...</span>")
+        self.log_label = Gtk.Label(); self.log_label.set_markup("<span size='small' color='#555555'><b>Verbose log :</b> Waiting...</span>")
         self.log_label.set_halign(Gtk.Align.START); vbox.pack_start(self.log_label, False, False, 0)
 
-        # Indicateur d'activité (séparé du statut serveur)
+        # Activity indicator (separate from server status)
         self.activity_label = Gtk.Label()
-        self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche :</b> Inactive</span>")
+        self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Task :</b> Inactive</span>")
         self.activity_label.set_halign(Gtk.Align.START); vbox.pack_start(self.activity_label, False, False, 0)
         GLib.timeout_add_seconds(2, self._refresh_activity_timer)
 
-        # --- Métriques GPU ---
+        # --- GPU metrics ---
         self.gpu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.gpu_box.set_halign(Gtk.Align.CENTER)
 
@@ -109,7 +121,7 @@ class LlamaServerWindow(Gtk.Window):
 
         self.gpu_util_bar = Gtk.ProgressBar()
         self.gpu_util_val = Gtk.Label()
-        self.gpu_box.pack_start(make_row("Utilisation", self.gpu_util_bar, self.gpu_util_val), False, False, 0)
+        self.gpu_box.pack_start(make_row("Usage", self.gpu_util_bar, self.gpu_util_val), False, False, 0)
 
         self.gpu_mem_bar = Gtk.ProgressBar()
         self.gpu_mem_val = Gtk.Label()
@@ -121,13 +133,14 @@ class LlamaServerWindow(Gtk.Window):
 
         vbox.pack_start(self.gpu_box, False, False, 0)
         GLib.timeout_add_seconds(2, self._refresh_gpu_timer)
+        self._update_gpu_indicator()
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL); vbox.pack_start(sep, False, False, 0)
 
         # Boutons Start/Stop
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10); btn_box.set_halign(Gtk.Align.CENTER)
-        self.btn_start = Gtk.Button(label="Démarrer le serveur"); self.btn_start.set_hexpand(True); self.btn_start.connect("clicked", self.on_start); btn_box.pack_start(self.btn_start, True, True, 0)
-        self.btn_stop = Gtk.Button(label="Arrêter le serveur"); self.btn_stop.set_hexpand(True); self.btn_stop.connect("clicked", self.on_stop); btn_box.pack_start(self.btn_stop, True, True, 0)
+        self.btn_start = Gtk.Button(label="Start server"); self.btn_start.set_hexpand(True); self.btn_start.connect("clicked", self.on_start); btn_box.pack_start(self.btn_start, True, True, 0)
+        self.btn_stop = Gtk.Button(label="Stop server"); self.btn_stop.set_hexpand(True); self.btn_stop.connect("clicked", self.on_stop); btn_box.pack_start(self.btn_stop, True, True, 0)
         vbox.pack_start(btn_box, False, False, 0)
 
         self.add(vbox); self._update_buttons()
@@ -135,9 +148,19 @@ class LlamaServerWindow(Gtk.Window):
         self.connect("delete-event", self.on_close)
 
     def _load_models(self):
+        # Re-read MODEL_DIR from config.conf (in case user changed it)
+        try:
+            with open(CONFIG_CONF, "r") as f:
+                for line in f:
+                    if line.startswith("MODEL_DIR="):
+                        current_dir = line.split("=", 1)[1].strip().strip('"')
+                        globals()["MODELS_DIR"] = current_dir
+                        break
+        except Exception:
+            pass
         self.model_combo.remove_all()
         models = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
-        if not models: self.model_combo.append_text("Aucun modèle trouvé"); self.model_combo.set_sensitive(False); return
+        if not models: self.model_combo.append_text("No model found"); self.model_combo.set_sensitive(False); return
         for m in models: self.model_combo.append_text(m)
         try:
             if os.path.exists(CONFIG_FILE):
@@ -152,8 +175,8 @@ class LlamaServerWindow(Gtk.Window):
 
     def _status_markup(self):
         if self.running:
-            return "<span color='#26a269'><b>● Serveur : Démarré</b></span>"
-        return "<span color='#cc3333'><b>○ Serveur : Arrêté</b></span>"
+            return "<span color='#26a269'><b>● Server: Running</b></span>"
+        return "<span color='#cc3333'><b>○ Server: Stopped</b></span>"
 
     def _update_buttons(self):
         self.btn_start.set_sensitive(not self.running)
@@ -179,7 +202,7 @@ class LlamaServerWindow(Gtk.Window):
             notify("Erreur", err or out)
 
     def on_apply_models(self, button):
-        """Change de modèle : arrête, sauvegarde le nouveau, redémarre le tout en-place."""
+        """Model change: stops, saves new, restarts everything in place."""
         active = self.model_combo.get_active()
         if active < 0: return
         new_model = self.model_combo.get_active_text()
@@ -190,11 +213,11 @@ class LlamaServerWindow(Gtk.Window):
             with open(CONFIG_FILE, "r") as f: current = f.read().strip() or "inconnu"
 
         if new_model == current:
-            notify("Info", "Déjà ce modèle"); return
+            notify("Info", "Already this model"); return
 
-        # On arrête le serveur
+        # Stopping server
         self.on_stop(None)
-        # Petite pause, puis on relance avec le nouveau modèle
+        # Short pause, then restart with new model
         def delayed_start():
             run_cmd([WRAPPER, "start"], env_extra={"MODEL_PATH": new_model})
             return False
@@ -205,10 +228,10 @@ class LlamaServerWindow(Gtk.Window):
 
         GLib.timeout_add(1000, delayed_start)
         GLib.timeout_add(2000, update_status)
-        notify("Info", "Modèle changé pour " + os.path.basename(new_model))
+        notify("Info", "Model changed to " + os.path.basename(new_model))
 
     def open_config_editor(self, button):
-        """Ouvre un éditeur pour modifier /opt/llamacpp-launcher/config.conf directement."""
+        """Open editor to modify /opt/llamacpp-launcher/config.conf directement."""
         CONFIG_PATH = "/opt/llamacpp-launcher/config.conf"
 
         try:
@@ -218,7 +241,7 @@ class LlamaServerWindow(Gtk.Window):
             notify("Erreur", f"Impossible de lire {CONFIG_PATH}\n{e}")
             return
 
-        dialog = Gtk.Dialog(title="Configuration - config.conf", transient_for=self,
+        dialog = Gtk.Dialog(title="Settings - config.conf", transient_for=self,
                             flags=Gtk.DialogFlags.MODAL)
         dialog.set_default_size(600, 450)
         dialog.add_buttons("Annuler", Gtk.ResponseType.CANCEL,
@@ -228,7 +251,7 @@ class LlamaServerWindow(Gtk.Window):
         box.set_spacing(10)
 
         info = Gtk.Label()
-        info.set_markup("<b>Modifiez le fichier de configuration ci-dessous :</b>")
+        info.set_markup("<b>Edit the config file below:</b>")
         info.set_halign(Gtk.Align.START)
         box.pack_start(info, False, False, 0)
 
@@ -249,16 +272,16 @@ class LlamaServerWindow(Gtk.Window):
         if response == Gtk.ResponseType.OK:
             new_content = buffer_.get_text(buffer_.get_start_iter(), buffer_.get_end_iter(), True)
             try:
-                # Sauvegarde propre avec préservation des commentaires/lignes vides
+                # Proper save preserving comments/empty lines
                 with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                     f.write(new_content)
-                notify("Configuration", "Fichier config.conf enregistré.\nRedémarrez le serveur pour appliquer les changements.")
-                # Si le serveur tourne, on le redémarre pour appliquer les nouveaux paramètres
+                notify("Settings", "config.conf saved.\nRestart server to apply changes.")
+                # If server is running, restart it to apply new settings
                 if is_running():
                     self.on_stop(None)
                     GLib.timeout_add(1500, self.on_start, None)
             except Exception as e:
-                notify("Erreur", f"Impossible d'écrire {CONFIG_PATH}\n{e}")
+                notify("Error", f"Failed to write {CONFIG_PATH}\n{e}")
 
         dialog.destroy()
 
@@ -267,7 +290,7 @@ class LlamaServerWindow(Gtk.Window):
             if os.path.exists(LOG_FILE):
                 with open(LOG_FILE, "r") as f: lines = f.read().splitlines()
                 display = "\n".join(lines[-3:] if len(lines) >= 3 else lines[-1:] if lines else "")
-                self.log_label.set_markup("<span size='x-small' color='#333333'><b>Sortie verbeuse :</b>\n" + display[-500:] + "</span>")
+                self.log_label.set_markup("<span size='x-small' color='#333333'><b>Verbose log :</b>\n" + display[-500:] + "</span>")
         except Exception: pass
 
     def _refresh_log_timer(self):
@@ -293,10 +316,10 @@ class LlamaServerWindow(Gtk.Window):
                 self.activity_label.set_markup("<span size='small' color='#e5a23a'><b>●</b> <b>Activité :</b> Traitement en cours...</span>")
                 self.was_active = True
             elif self.running:
-                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche</b> : Inactive</span>")
+                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Task</b> : Inactive</span>")
                 self.was_active = False
             else:
-                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Tâche</b> : Inactive</span>")
+                self.activity_label.set_markup("<span size='small' color='#3584e4'><b>●</b> <b>Task</b> : Inactive</span>")
                 self.was_active = False
         except Exception:
             pass
@@ -325,7 +348,7 @@ class LlamaServerWindow(Gtk.Window):
             )
             data_line = ""
             if result.returncode != 0 or not result.stdout.strip():
-                # Défaillance : rien sur GPU
+                # Failure: nothing on GPU
                 pass
             else:
                 lines = [l for l in result.stdout.strip().splitlines() if l.strip()]
@@ -357,7 +380,7 @@ class LlamaServerWindow(Gtk.Window):
                     pass
 
                 self.gpu_util_bar.set_fraction(0.0)
-                self.gpu_util_val.set_markup("<span size='small'>—</span>")
+                self.gpu_util_val.set_markup("<span size='small' color='#ff5f57'><b>No GPU detected</b></span>")
                 self.gpu_mem_bar.set_fraction(0.0)
                 self.gpu_mem_val.set_markup("<span size='small'>—</span>")
                 self.gpu_temp_bar.set_fraction(0.0)
