@@ -2,7 +2,9 @@
 
 A standalone GTK launcher for the `llama.cpp` server (`llama-server`).
 
-![Llama-launcher](/image_readme.png)
+<p align="center">
+  <img src="/image_readme.png" width="50%">
+</p>
 
 **Developed with the help of artificial intelligence** — This project was developed with AI assistance.
 
